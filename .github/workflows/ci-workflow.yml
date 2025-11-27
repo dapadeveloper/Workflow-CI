@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 0 * * 0'  # Run every Sunday at midnight
+    - cron: '0 0 * * 0'
 
 jobs:
   train-model:
@@ -26,7 +26,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install mlflow pandas numpy scikit-learn boto3
         
-    - name: Run MLflow project (no conda)
+    - name: Run MLflow project (local env, no conda)
       run: |
         cd MLProject
         mlflow run . --experiment-name wine-quality-ci --env-manager=local
@@ -38,6 +38,7 @@ jobs:
         path: MLProject/mlruns/
         retention-days: 30
         
+
   build-docker:
     needs: train-model
     runs-on: ubuntu-latest
@@ -64,7 +65,9 @@ jobs:
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:latest
         
-    - name: Build Docker with MLflow
+    - name: Build Docker with MLflow model
       run: |
         cd MLProject
-        mlflow models build-docker -m ./mlruns/0/$(ls -t ./mlruns/0/ | head -1)/artifacts/random_forest_model -n wine-quality-mlflow-model
+        LATEST_RUN=$(ls -t mlruns/0/ | head -1)
+        mlflow models build-docker -m mlruns/0/$LATEST_RUN/artifacts/random_forest_model \
+          -n wine-quality-mlflow-model

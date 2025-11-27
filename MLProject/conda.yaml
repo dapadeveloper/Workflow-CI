@@ -1,0 +1,13 @@
+name: wine-quality-model
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - pandas
+  - numpy
+  - scikit-learn
+  - pip:
+    - mlflow>=2.0
+    - boto3

@@ -26,10 +26,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install mlflow pandas numpy scikit-learn boto3
         
-    - name: Run MLflow project
+    - name: Run MLflow project (no conda)
       run: |
         cd MLProject
-        mlflow run . --experiment-name wine-quality-ci
+        mlflow run . --experiment-name wine-quality-ci --env-manager=local
         
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4

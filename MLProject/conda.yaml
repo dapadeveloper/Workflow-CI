@@ -10,4 +10,3 @@ dependencies:
   - scikit-learn
   - pip:
     - mlflow>=2.0
-    - boto3

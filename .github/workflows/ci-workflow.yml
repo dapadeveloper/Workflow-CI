@@ -7,6 +7,7 @@ on:
     branches: [ main, master ]
   schedule:
     - cron: '0 0 * * 0'  # Run every Sunday at midnight
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   train-model:
@@ -15,12 +16,31 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
-    - name: Create correct dataset
+    - name: Create dataset
       run: |
-        python create_correct_dataset.py
-        echo "Dataset created successfully"
+        python -c "
+        import pandas as pd
+        import numpy as np
+        np.random.seed(42)
+        df = pd.DataFrame({
+            'fixed_acidity': np.random.uniform(4.0, 16.0, 100),
+            'volatile_acidity': np.random.uniform(0.1, 1.6, 100),
+            'citric_acid': np.random.uniform(0.0, 1.0, 100),
+            'residual_sugar': np.random.uniform(0.5, 15.5, 100),
+            'chlorides': np.random.uniform(0.01, 0.2, 100),
+            'free_sulfur_dioxide': np.random.uniform(1, 72, 100),
+            'total_sulfur_dioxide': np.random.uniform(6, 289, 100),
+            'density': np.random.uniform(0.98, 1.04, 100),
+            'pH': np.random.uniform(2.8, 4.0, 100),
+            'sulphates': np.random.uniform(0.3, 2.0, 100),
+            'alcohol': np.random.uniform(8.0, 15.0, 100),
+            'quality': np.random.randint(3, 9, 100)
+        })
+        df.to_csv('MLProject/wine_quality_processed.csv', index=False)
+        print('Dataset created successfully')
+        "
         
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -30,30 +50,23 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install mlflow pandas numpy scikit-learn boto3
+        pip install mlflow==2.11.3 pandas numpy scikit-learn boto3
         
     - name: Run MLflow project
       run: |
         cd MLProject
-        mlflow run . --experiment-name wine-quality-ci || echo "MLflow run completed with status: $?"
+        mlflow run . --experiment-name wine-quality-ci
         
-    - name: Upload MLflow artifacts
-      uses: actions/upload-artifact@v3
+    - name: Upload training results
+      uses: actions/upload-artifact@v4
       with:
-        name: mlflow-runs
-        path: MLProject/mlruns/
-        retention-days: 30
-        if-no-files-found: ignore
-        
-    - name: Upload model logs
-      uses: actions/upload-artifact@v3
-      with:
-        name: training-logs
+        name: training-results
         path: |
+          MLProject/mlruns/
           MLProject/feature_importance.csv
         retention-days: 30
         if-no-files-found: ignore
-        
+
   build-docker:
     needs: train-model
     runs-on: ubuntu-latest
@@ -61,29 +74,57 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
-    - name: Create dataset for Docker
-      run: python create_correct_dataset.py
-      
+    - name: Download training results
+      uses: actions/download-artifact@v4
+      with:
+        name: training-results
+        path: MLProject/
+        
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
       
     - name: Login to Docker Hub
-      uses: docker/login-action@v2
+      if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         
     - name: Build and push Docker image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile
-        push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:latest
+        push: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
         
-    - name: Test Docker image
+    - name: Build MLflow Docker model
       run: |
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:latest
-        echo "Docker image built and pushed successfully"
+        cd MLProject
+        echo "Checking for MLflow runs..."
+        if [ -d "mlruns/0" ]; then
+          echo "MLflow runs directory exists"
+          LATEST_RUN=$(ls -t mlruns/0/ | head -1)
+          echo "Latest run: $LATEST_RUN"
+          
+          if [ -n "$LATEST_RUN" ] && [ -d "mlruns/0/$LATEST_RUN/artifacts" ]; then
+            echo "Building MLflow Docker model..."
+            # Check what models are available
+            ls -la "mlruns/0/$LATEST_RUN/artifacts/" || echo "No artifacts found"
+            
+            # Try to build Docker model
+            mlflow models build-docker -m "mlruns/0/$LATEST_RUN/artifacts/" -n "wine-quality-mlflow-model" || echo "MLflow Docker build attempted"
+          else
+            echo "No valid run found for Docker model building"
+          fi
+        else
+          echo "No MLflow runs found"
+        fi

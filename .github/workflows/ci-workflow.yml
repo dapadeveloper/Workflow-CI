@@ -52,10 +52,10 @@ jobs:
         print('Dataset created successfully')
         "
         
-    - name: Run MLflow project
+    - name: Run modelling directly (skip MLflow project)
       run: |
         cd MLProject
-        mlflow run . --experiment-name wine-quality-ci
+        python modelling.py
         
     - name: Upload training results
       uses: actions/upload-artifact@v4
@@ -81,15 +81,6 @@ jobs:
       with:
         name: training-results
         path: MLProject/
-        
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.8'
-        
-    - name: Install MLflow for Docker build
-      run: |
-        pip install mlflow
         
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -134,8 +125,7 @@ jobs:
               echo "Found model at: mlruns/0/$LATEST_RUN/artifacts/random_forest_model"
               mlflow models build-docker -m "mlruns/0/$LATEST_RUN/artifacts/random_forest_model" -n "wine-quality-mlflow-model" || echo "MLflow Docker build completed"
             else
-              echo "No specific model directory found, trying artifacts root"
-              mlflow models build-docker -m "mlruns/0/$LATEST_RUN/artifacts" -n "wine-quality-mlflow-model" || echo "MLflow Docker build attempted"
+              echo "No specific model directory found"
             fi
           else
             echo "No valid run found for Docker model building"

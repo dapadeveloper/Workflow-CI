@@ -6,130 +6,124 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 0 * * 0'  # Run every Sunday at midnight
-  workflow_dispatch:  # Allow manual trigger
+    - cron: "0 0 * * 0"   # weekly
+  workflow_dispatch:
 
 jobs:
+
   train-model:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    
+
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.8'
-        
-    - name: Install Python dependencies
+        python-version: "3.10"
+
+    - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pandas numpy scikit-learn mlflow boto3
-        
-    - name: Create dataset
+
+    - name: Generate banknote dataset (dummy if missing)
       run: |
-        python -c "
+        python - <<EOF
         import pandas as pd
         import numpy as np
+        
         np.random.seed(42)
         df = pd.DataFrame({
-            'fixed_acidity': np.random.uniform(4.0, 16.0, 100),
-            'volatile_acidity': np.random.uniform(0.1, 1.6, 100),
-            'citric_acid': np.random.uniform(0.0, 1.0, 100),
-            'residual_sugar': np.random.uniform(0.5, 15.5, 100),
-            'chlorides': np.random.uniform(0.01, 0.2, 100),
-            'free_sulfur_dioxide': np.random.uniform(1, 72, 100),
-            'total_sulfur_dioxide': np.random.uniform(6, 289, 100),
-            'density': np.random.uniform(0.98, 1.04, 100),
-            'pH': np.random.uniform(2.8, 4.0, 100),
-            'sulphates': np.random.uniform(0.3, 2.0, 100),
-            'alcohol': np.random.uniform(8.0, 15.0, 100),
-            'quality': np.random.randint(3, 9, 100)
+            'variance': np.random.randn(100),
+            'skewness': np.random.randn(100),
+            'curtosis': np.random.randn(100),
+            'entropy': np.random.randn(100),
+            'class': np.random.randint(0, 2, 100)
         })
-        df.to_csv('MLProject/wine_quality_processed.csv', index=False)
-        print('Dataset created successfully')
-        "
         
-    - name: Run modelling directly (skip MLflow project)
+        df.to_csv("MLProject/banknote_preprocessed.csv", index=False)
+        print("Dataset banknote_preprocessed.csv created successfully")
+        EOF
+
+    - name: Run modelling.py
       run: |
         cd MLProject
         python modelling.py
-        
-    - name: Upload training results
+
+    - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: training-results
         path: |
           MLProject/mlruns/
-          MLProject/feature_importance.csv
+          MLProject/*.csv
         retention-days: 30
         if-no-files-found: ignore
+
 
   build-docker:
     needs: train-model
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    
+
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
-      
-    - name: Download training results
+
+    - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
         name: training-results
         path: MLProject/
-        
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and push Docker image
+
+    - name: Build & Push App Docker Image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile
-        push: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model:${{ github.sha }}
+          dapadeveloper/banknote_authentication:latest
+          dapadeveloper/banknote_authentication:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        
-    - name: Build MLflow Docker model
+
+    - name: Build MLflow Model Docker Image
       run: |
         cd MLProject
-        echo "Checking for MLflow runs..."
+
+        echo "Checking MLflow runs..."
         if [ -d "mlruns/0" ]; then
-          echo "MLflow runs directory exists"
-          LATEST_RUN=$(ls -t mlruns/0/ | head -1)
-          echo "Latest run: $LATEST_RUN"
-          
-          if [ -n "$LATEST_RUN" ] && [ -d "mlruns/0/$LATEST_RUN/artifacts" ]; then
-            echo "Building MLflow Docker model..."
-            # Check what models are available
-            ls -la "mlruns/0/$LATEST_RUN/artifacts/" || echo "No artifacts found"
-            
-            # Try different model paths
-            if [ -d "mlruns/0/$LATEST_RUN/artifacts/model" ]; then
-              echo "Found model at: mlruns/0/$LATEST_RUN/artifacts/model"
-              mlflow models build-docker -m "mlruns/0/$LATEST_RUN/artifacts/model" -n "wine-quality-mlflow-model" || echo "MLflow Docker build completed"
-            elif [ -d "mlruns/0/$LATEST_RUN/artifacts/random_forest_model" ]; then
-              echo "Found model at: mlruns/0/$LATEST_RUN/artifacts/random_forest_model"
-              mlflow models build-docker -m "mlruns/0/$LATEST_RUN/artifacts/random_forest_model" -n "wine-quality-mlflow-model" || echo "MLflow Docker build completed"
-            else
-              echo "No specific model directory found"
-            fi
+          LATEST_RUN=$(ls -t mlruns/0 | head -1)
+          echo "Latest MLflow run: $LATEST_RUN"
+
+          MODEL_DIR=""
+          if [ -d "mlruns/0/$LATEST_RUN/artifacts/model" ]; then
+            MODEL_DIR="mlruns/0/$LATEST_RUN/artifacts/model"
+          elif [ -d "mlruns/0/$LATEST_RUN/artifacts/random_forest_model" ]; then
+            MODEL_DIR="mlruns/0/$LATEST_RUN/artifacts/random_forest_model"
+          fi
+
+          if [ ! -z "$MODEL_DIR" ]; then
+            echo "Found MLflow model: $MODEL_DIR"
+            mlflow models build-docker \
+              -m "$MODEL_DIR" \
+              -n dapadeveloper/banknote_authentication_mlflow || true
           else
-            echo "No valid run found for Docker model building"
+            echo "No MLflow model artifacts found."
           fi
         else
-          echo "No MLflow runs found"
+          echo "No MLflow experiment runs found."
         fi

@@ -1,0 +1,34 @@
+name: Run Preprocessing Automatically
+
+on:
+  push:
+    paths:
+      - "dataset_preprocessing/banknote_preprocessed.csv"
+      - "preprocessing/automate_naufal.py"
+
+jobs:
+  preprocess:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas scikit-learn matplotlib seaborn
+
+      - name: Run preprocessing script
+        run: |
+          python preprocessing/automate_naufal.py
+
+      - name: Upload processed dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: banknote_preprocessed
+          path: dataset_preprocessing/banknote_preprocessed.csv

@@ -5,21 +5,19 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  schedule:
-    - cron: "0 0 * * 0"   # weekly
   workflow_dispatch:
 
 jobs:
 
   train-model:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.10"
@@ -27,41 +25,34 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pandas numpy scikit-learn mlflow boto3
+        pip install pandas numpy scikit-learn mlflow joblib
 
-    - name: Generate banknote dataset (dummy if missing)
+    - name: Verify RAW Dataset Exists
       run: |
-        python - <<EOF
-        import pandas as pd
-        import numpy as np
-        
-        np.random.seed(42)
-        df = pd.DataFrame({
-            'variance': np.random.randn(100),
-            'skewness': np.random.randn(100),
-            'curtosis': np.random.randn(100),
-            'entropy': np.random.randn(100),
-            'class': np.random.randint(0, 2, 100)
-        })
-        
-        df.to_csv("MLProject/banknote_preprocessed.csv", index=False)
-        print("Dataset banknote_preprocessed.csv created successfully")
-        EOF
+        if [ ! -f "MLProject/namadataset_preprocessing/banknote_raw.csv" ]; then
+          echo " ERROR: banknote_raw.csv tidak ditemukan!"
+          exit 1
+        fi
+        echo " RAW dataset ditemukan."
 
-    - name: Run modelling.py
+    - name: Run Preprocessing
+      run: |
+        cd MLProject
+        python preprocessing.py
+
+    - name: Run Modelling
       run: |
         cd MLProject
         python modelling.py
 
-    - name: Upload MLflow artifacts
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: training-results
+        name: mlflow-results
         path: |
-          MLProject/mlruns/
-          MLProject/*.csv
+          MLProject/mlruns
+          MLProject/namadataset_preprocessing/*.csv
         retention-days: 30
-        if-no-files-found: ignore
 
 
   build-docker:
@@ -70,16 +61,17 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
     steps:
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: training-results
+        name: mlflow-results
         path: MLProject/
 
-    - name: Set up Docker Buildx
+    - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Login to Docker Hub
@@ -88,7 +80,7 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build & Push App Docker Image
+    - name: Build & Push Application Image
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -97,33 +89,27 @@ jobs:
         tags: |
           dapadeveloper/banknote_authentication:latest
           dapadeveloper/banknote_authentication:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
     - name: Build MLflow Model Docker Image
       run: |
         cd MLProject
 
-        echo "Checking MLflow runs..."
         if [ -d "mlruns/0" ]; then
           LATEST_RUN=$(ls -t mlruns/0 | head -1)
-          echo "Latest MLflow run: $LATEST_RUN"
-
+          
           MODEL_DIR=""
           if [ -d "mlruns/0/$LATEST_RUN/artifacts/model" ]; then
             MODEL_DIR="mlruns/0/$LATEST_RUN/artifacts/model"
-          elif [ -d "mlruns/0/$LATEST_RUN/artifacts/random_forest_model" ]; then
-            MODEL_DIR="mlruns/0/$LATEST_RUN/artifacts/random_forest_model"
           fi
 
           if [ ! -z "$MODEL_DIR" ]; then
-            echo "Found MLflow model: $MODEL_DIR"
             mlflow models build-docker \
               -m "$MODEL_DIR" \
               -n dapadeveloper/banknote_authentication_mlflow || true
           else
-            echo "No MLflow model artifacts found."
+            echo " Model folder tidak ditemukan."
           fi
+
         else
-          echo "No MLflow experiment runs found."
+          echo " Tidak ada MLflow experiment."
         fi

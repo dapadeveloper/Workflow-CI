@@ -29,8 +29,8 @@ jobs:
 
     - name: Verify RAW Dataset Exists
       run: |
-        if [ ! -f "MLProject/namadataset_preprocessing/banknote_raw.csv" ]; then
-          echo " ERROR: banknote_raw.csv tidak ditemukan!"
+        if [ ! -f "MLProject/namadataset_preprocessing/banknote_authentication.csv" ]; then
+          echo " ERROR: banknote_authentication.csv tidak ditemukan!"
           exit 1
         fi
         echo " RAW dataset ditemukan."

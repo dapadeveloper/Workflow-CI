@@ -11,7 +11,7 @@ mlflow.set_tracking_uri("file:./mlruns")
 mlflow.set_experiment("Banknote_Authentication")
 
 # Load dataset hasil preprocessing
-data = pd.read_csv("banknote_preprocessed.csv")
+data = pd.read_csv("namadataset_preprocessing/banknote_preprocessed.csv")
 
 X = data.drop("class", axis=1)
 y = data["class"]

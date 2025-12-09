@@ -18,43 +18,33 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Debug MLProject folder structure
-      run: |
-        echo "CURRENT WORKING DIRECTORY (harusnya Workflow-CI/):"
-        pwd
-        echo "LISTING MLProject CONTENT:"
-        ls -R MLProject
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.10"
 
+    # PERBAIKAN: Menginstal dependensi dari requirements.txt di subfolder MLProject
     - name: Install Dependencies
-      # Pastikan semua library yang dibutuhkan diinstal di lingkungan runner
       run: |
         python -m pip install --upgrade pip
-        # Instal semua library dasar
-        pip install pandas numpy scikit-learn mlflow
+        # Instal semua dependensi dari requirements.txt di folder MLProject
+        pip install -r MLProject/requirements.txt 
+        # Tambahkan mlflow secara eksplisit jika belum ada di requirements.txt
+        pip install mlflow
 
-    # FINAL REVISION: Menggunakan mlflow run untuk memanggil entry point
+    # MLflow sekarang hanya akan menjalankan script tanpa mencoba membuat lingkungan baru
     - name: Run MLflow Project (Preprocessing & Modelling)
-      # Perintah dijalankan dari root (Workflow-CI/), merujuk ke folder ./MLProject.
-      # MLflow akan membaca MLProject/MLproject dan menggunakan lingkungan Python yang sudah ada.
       run: |
         echo "Running Preprocessing (Entry Point: preprocess)..."
-        # Menjalankan entry point 'preprocess'
         mlflow run ./MLProject -e preprocess
         
         echo "Running Modelling (Entry Point: train)..."
-        # Menjalankan entry point 'train'
         mlflow run ./MLProject -e train
 
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: training-results
-        # Path harus mutlak ke direktori tempat MLflow membuat file/folder tersebut (di dalam MLProject/)
         path: |
           MLProject/mlruns/
           MLProject/namadataset_preprocessing

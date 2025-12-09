@@ -31,23 +31,30 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
+        # Lebih baik menginstal dari requirements.txt di root MLProject jika ada:
+        # pip install -r MLProject/requirements.txt
+        # Atau, gunakan daftar yang sudah Anda tentukan:
         pip install pandas numpy scikit-learn mlflow
 
-    - name: Run preprocessing
-      run: |
-        cd MLProject
-        python preprocessing.py
 
-    - name: Run modelling
+    - name: Run MLflow Project (Preprocessing & Modelling)
+      # Menjalankan proyek MLflow yang ada di subfolder './MLProject'
+      # dengan entry point 'preprocess' diikuti 'train'.
       run: |
-        cd MLProject
-        python modelling.py
+        echo "Running Preprocessing (Entry Point: preprocess)..."
+        mlflow run ./MLProject -e preprocess
+        
+        echo "Running Modelling (Entry Point: train)..."
+        mlflow run ./MLProject -e train
+
+# --- END OF REVISION ---
 
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: training-results
         path: |
+          # Path ini sesuai, karena mlruns dan namadataset_preprocessing dibuat di dalam MLProject/
           MLProject/mlruns/
           MLProject/namadataset_preprocessing
         retention-days: 30

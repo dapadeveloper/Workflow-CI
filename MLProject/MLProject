@@ -1,7 +1,10 @@
-name: banknote_project
-
-conda_env: conda.yaml
+name: banknote-authentication
 
 entry_points:
-  main:
+  # Entry point untuk Preprocessing
+  preprocess:
+    command: "python preprocessing.py"
+    
+  # Entry point untuk Modelling
+  train:
     command: "python modelling.py"

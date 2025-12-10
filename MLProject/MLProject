@@ -1,7 +1,5 @@
 name: banknote-authentication
 
 entry_points:
-  preprocess:
-    command: "python preprocessing.py"
   train:
     command: "python modelling.py"

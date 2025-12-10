@@ -24,22 +24,17 @@ jobs:
         python-version: "3.10"
 
     - name: Install Dependencies
-      # Pastikan semua dependensi terinstal
       run: |
         python -m pip install --upgrade pip
         pip install pandas numpy scikit-learn mlflow
     
-    # Pendekatan 1: Menjalankan Python langsung 
-    - name: Run Preprocessing (Direct Python Execution)
-      run: |
-        cd MLProject
-        python preprocessing.py
 
-    - name: Run Modelling (Direct Python Execution)
-      # sehingga logging MLflow tetap berfungsi.
+    - name: Run MLflow Project
       run: |
         cd MLProject
-        python modelling.py
+        # Ganti dengan nama entry point yang sesuai di MLProject, 
+        # contoh: 'main' atau 'train'.
+        mlflow run . -e train # Sesuaikan '-e train' dengan entry point Anda
 
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4

@@ -24,20 +24,15 @@ jobs:
         python-version: "3.10"
 
     - name: Install Dependencies
-      # Menginstal semua dependensi di lingkungan GitHub Actions
       run: |
         python -m pip install --upgrade pip
         pip install pandas numpy scikit-learn mlflow
     
-    # LANGKAH PREPROCESSING DIHAPUS
 
     - name: Run MLflow Project (Training Only)
-      # Menggunakan '-e train' untuk memanggil 'python modelling.py'
-      # Menggunakan '--no-conda' untuk mencegah MLflow mencoba membuat lingkungan 
-      # virtual baru, yang menyebabkan FileNotFoundError.
       run: |
         cd MLProject
-        mlflow run . -e train --no-conda 
+        mlflow run . -e train 
 
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4

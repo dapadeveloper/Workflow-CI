@@ -28,11 +28,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas numpy scikit-learn mlflow
     
+    # LANGKAH PREPROCESSING DIHAPUS
 
-    - name: Run MLflow Project (Training Only)
+    - name: Run Modelling (Direct Python Execution)
+      # Mengatasi error MLflow dengan menjalankan skrip modelling.py secara langsung.
+      # Ini akan menggunakan MLflow logging yang didefinisikan di dalam skrip Python Anda.
       run: |
         cd MLProject
-        mlflow run . -e train 
+        python modelling.py # Ganti 'mlflow run . -e train' dengan ini
 
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
